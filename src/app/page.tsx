@@ -1,103 +1,832 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Trash2,
+  Download,
+  Upload,
+  Plus,
+  RefreshCcw,
+  Calendar,
+  Droplets,
+  Beef,
+  Edit2,
+  LogIn,
+  LogOut,
+  User,
+} from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { createClient, Session, SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * This version removes shadcn/ui entirely and uses small inline UI primitives
+ * (Button, Card, etc.) built with Tailwind classes only. It avoids the
+ * shadcn CLI validation and works with Tailwind v3 or v4.
+ */
+
+// ---- Tiny UI primitives (Tailwind only) ----
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function Button({
+  children,
+  className,
+  variant = "default",
+  size = "md",
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "default" | "secondary" | "outline" | "destructive" | "ghost";
+  size?: "sm" | "md";
+}) {
+  const base =
+    "inline-flex items-center justify-center rounded-2xl font-medium transition active:scale-[.98] disabled:opacity-50 disabled:pointer-events-none";
+  const sizes = {
+    sm: "h-8 px-3 text-sm",
+    md: "h-10 px-4 text-sm",
+  } as const;
+  const variants = {
+    default: "bg-slate-900 text-white hover:bg-slate-800 shadow",
+    secondary: "bg-slate-100 text-slate-900 hover:bg-slate-200",
+    outline: "border border-slate-300 bg-white hover:bg-slate-50",
+    destructive: "bg-red-600 text-white hover:bg-red-500",
+    ghost: "hover:bg-slate-100",
+  } as const;
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <button
+      className={cx(base, sizes[size], variants[variant], className)}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+function Card({
+  className,
+  children,
+}: React.PropsWithChildren<{ className?: string }>) {
+  return (
+    <div className={cx("rounded-2xl border bg-white shadow-sm", className)}>
+      {children}
+    </div>
+  );
+}
+function CardHeader({
+  className,
+  children,
+}: React.PropsWithChildren<{ className?: string }>) {
+  return <div className={cx("border-b p-4", className)}>{children}</div>;
+}
+function CardTitle({
+  className,
+  children,
+}: React.PropsWithChildren<{ className?: string }>) {
+  return <h2 className={cx("text-lg font-semibold", className)}>{children}</h2>;
+}
+
+function CardContent({
+  className,
+  children,
+}: React.PropsWithChildren<{ className?: string }>) {
+  return <div className={cx("p-4", className)}>{children}</div>;
+}
+
+function Label({
+  className,
+  children,
+  htmlFor,
+}: {
+  className?: string;
+  children: React.ReactNode;
+  htmlFor?: string;
+}) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className={cx("text-sm font-medium text-slate-700", className)}
+    >
+      {children}
+    </label>
+  );
+}
+function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={cx(
+        "h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-slate-300",
+        props.className
+      )}
+    />
+  );
+}
+function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      {...props}
+      className={cx(
+        "w-full rounded-xl border border-slate-300 bg-white p-3 text-sm outline-none focus:ring-2 focus:ring-slate-300",
+        props.className
+      )}
+    />
+  );
+}
+
+// Minimal modal (for sign-in)
+function Modal({
+  open,
+  onClose,
+  title,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-md rounded-2xl border bg-white p-5 shadow-xl">
+        <div className="mb-2 text-lg font-semibold">{title}</div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ---- Supabase setup ----
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+export const supabase: SupabaseClient | null =
+  supabaseUrl && supabaseAnon ? createClient(supabaseUrl, supabaseAnon) : null;
+
+// ---- Types ----
+type Entry = {
+  id: string;
+  user_id?: string | null;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:MM
+  protein: number; // grams
+  water: number; // liters
+  note?: string | null;
+  created_at?: string;
+};
+
+type Goals = {
+  user_id?: string | null;
+  dailyProtein: number; // grams
+  dailyWater: number; // liters
+};
+
+// ---- Utilities ----
+const STORAGE_KEY = "pwt_entries_v1";
+const GOALS_KEY = "pwt_goals_v1";
+
+const nowLocal = () => new Date();
+const pad = (n: number) => String(n).padStart(2, "0");
+const toYMD = (d: Date) =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const toHM = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const roundTo = (val: number, step: number) => Math.round(val / step) * step;
+
+const exampleQuickAdds = [
+  { protein: 35, water: 0, label: "+35g" },
+  { protein: 49, water: 0, label: "+49g" },
+  { protein: 0, water: 0.5, label: "+0.5L" },
+];
+
+export default function ProteinWaterTracker() {
+  // Auth/session
+  const [session, setSession] = useState<Session | null>(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [showSignIn, setShowSignIn] = useState(false);
+
+  // Data
+  const [entries, setEntries] = useState<Entry[]>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? (JSON.parse(raw) as Entry[]) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [goals, setGoals] = useState<Goals>(() => {
+    try {
+      const raw = localStorage.getItem(GOALS_KEY);
+      return raw
+        ? (JSON.parse(raw) as Goals)
+        : { dailyProtein: 160, dailyWater: 2 };
+    } catch {
+      return { dailyProtein: 160, dailyWater: 2 };
+    }
+  });
+
+  const [date, setDate] = useState<string>(toYMD(nowLocal()));
+  const [time, setTime] = useState<string>(toHM(nowLocal()));
+  const [protein, setProtein] = useState<string>("");
+  const [water, setWater] = useState<string>("");
+  const [note, setNote] = useState<string>("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+
+  // persist local backup
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  }, [entries]);
+  useEffect(() => {
+    localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
+  }, [goals]);
+
+  // Supabase auth lifecycle
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth
+      .getSession()
+      .then(({ data }) => setSession(data.session ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) =>
+      setSession(s)
+    );
+    return () => sub?.subscription.unsubscribe();
+  }, []);
+
+  // Load remote data when logged in
+  useEffect(() => {
+    if (!supabase || !session) return;
+    const load = async () => {
+      setLoading(true);
+      const userId = session.user.id;
+      const { data: rows } = await supabase
+        .from("entries")
+        .select("id,user_id,date,time,protein,water,note,created_at")
+        .eq("user_id", userId)
+        .order("date", { ascending: true })
+        .order("time", { ascending: true });
+      if (rows) setEntries(rows as Entry[]);
+
+      const { data: g } = await supabase
+        .from("goals")
+        .select("dailyProtein,dailyWater")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (g) setGoals(g as Goals);
+      setLoading(false);
+    };
+    load();
+  }, [session]);
+
+  const upsertGoals = async (g: Goals) => {
+    setGoals(g);
+    if (!supabase || !session) return;
+    await supabase
+      .from("goals")
+      .upsert({
+        user_id: session.user.id,
+        dailyProtein: g.dailyProtein,
+        dailyWater: g.dailyWater,
+      });
+  };
+
+  const addOrUpdate = async () => {
+    if (!protein && !water) return;
+    const e: Entry = {
+      id: editingId ?? crypto.randomUUID(),
+      date,
+      time,
+      protein: protein ? Number(protein) : 0,
+      water: water ? Number(water) : 0,
+      note: note || null,
+    };
+
+    // local optimistic
+    setEntries((prev) =>
+      editingId
+        ? prev.map((x) => (x.id === editingId ? { ...e } : x))
+        : [...prev, e]
+    );
+
+    if (supabase && session) {
+      if (editingId) {
+        await supabase
+          .from("entries")
+          .update({
+            date: e.date,
+            time: e.time,
+            protein: e.protein,
+            water: e.water,
+            note: e.note,
+          })
+          .eq("id", e.id)
+          .eq("user_id", session.user.id);
+      } else {
+        const payload = { ...e, user_id: session.user.id };
+        await supabase.from("entries").insert(payload);
+      }
+    }
+
+    clearForm();
+  };
+
+  const removeEntry = async (id: string) => {
+    setEntries((prev) => prev.filter((e) => e.id !== id));
+    if (supabase && session) {
+      await supabase
+        .from("entries")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", session.user.id);
+    }
+  };
+
+  const clearForm = () => {
+    setProtein("");
+    setWater("");
+    setNote("");
+    setEditingId(null);
+    setTime(toHM(nowLocal()));
+  };
+
+  const editEntry = (e: Entry) => {
+    setEditingId(e.id);
+    setDate(e.date);
+    setTime(e.time);
+    setProtein(String(e.protein || ""));
+    setWater(String(e.water || ""));
+    setNote(e.note || "");
+  };
+
+  // CSV export/import works for both local and signed-in modes
+  const exportCSV = () => {
+    const headers = [
+      "date",
+      "time",
+      "grams_of_protein",
+      "liters_of_water",
+      "note",
+    ];
+    const rows = entries
+      .slice()
+      .sort((a, b) =>
+        a.date === b.date
+          ? a.time.localeCompare(b.time)
+          : a.date.localeCompare(b.date)
+      )
+      .map((e) => [e.date, e.time, e.protein, e.water, e.note ?? ""].join(","));
+
+    // Build CSV with proper newline characters
+    const csv = [headers.join(","), ...rows].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `protein_water_${toYMD(new Date())}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importCSV = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const text = String(reader.result);
+
+      // Correct newline handling
+      const lines = text.split(/\r?\n/).filter(Boolean);
+
+      const startIdx = lines[0].toLowerCase().includes("date") ? 1 : 0;
+      const loaded: Entry[] = [];
+      for (let i = startIdx; i < lines.length; i++) {
+        const [d, t, p, w, n] = lines[i].split(",");
+        if (!d || !t) continue;
+        loaded.push({
+          id: crypto.randomUUID(),
+          date: d,
+          time: t,
+          protein: Number(p || 0),
+          water: Number(w || 0),
+          note: n,
+        });
+      }
+      setEntries((prev) => [...prev, ...loaded]);
+      if (supabase && session) {
+        const payload = loaded.map((e) => ({ ...e, user_id: session.user.id }));
+        await supabase.from("entries").insert(payload);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Derived
+  const grouped = useMemo(() => {
+    const map: Record<string, Entry[]> = {};
+    entries
+      .slice()
+      .sort((a, b) =>
+        a.date === b.date
+          ? a.time.localeCompare(b.time)
+          : b.date.localeCompare(a.date)
+      )
+      .forEach((e) => {
+        (map[e.date] = map[e.date] || []).push(e);
+      });
+    return map;
+  }, [entries]);
+
+  const dailyTotals = useMemo(() => {
+    const totals: { date: string; protein: number; water: number }[] = [];
+    Object.entries(grouped).forEach(([d, arr]) => {
+      const protein = arr.reduce((s, e) => s + (e.protein || 0), 0);
+      const water = arr.reduce((s, e) => s + (e.water || 0), 0);
+      totals.push({
+        date: d,
+        protein: roundTo(protein, 0.1),
+        water: roundTo(water, 0.01),
+      });
+    });
+    return totals.sort((a, b) => a.date.localeCompare(b.date));
+  }, [grouped]);
+
+  const lastNDays = (n: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (n - 1));
+    const start = toYMD(d);
+    return dailyTotals.filter((t) => t.date >= start);
+  };
+
+  const today = toYMD(nowLocal());
+  const todayTotals = dailyTotals.find((d) => d.date === today) || {
+    protein: 0,
+    water: 0,
+  };
+
+  // Auth helpers
+  const signIn = async () => {
+    if (!supabase) return alert("Supabase not configured");
+    const { error } = await supabase.auth.signInWithOtp({
+      email: authEmail,
+      options: { emailRedirectTo: window.location.href },
+    });
+    if (error) alert(error.message);
+    else alert("Magic link sent. Check your email.");
+    setShowSignIn(false);
+  };
+  const signOut = async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+  };
+
+  return (
+    <div className="min-h-screen w-full bg-slate-50 p-6">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <header className="flex items-center justify-between">
+          <h1 className="text-3xl font-semibold tracking-tight">
+            Protein & Water Tracker
+          </h1>
+          <div className="flex items-center gap-2">
+            {session ? (
+              <>
+                <div className="text-sm text-slate-600 flex items-center gap-2">
+                  <User className="h-4 w-4" /> {session.user.email}
+                </div>
+                <Button variant="outline" onClick={signOut} className="gap-2">
+                  <LogOut className="h-4 w-4" />
+                  Sign out
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="secondary"
+                className="gap-2"
+                onClick={() => setShowSignIn(true)}
+              >
+                <LogIn className="h-4 w-4" />
+                Sign in
+              </Button>
+            )}
+            <Button variant="outline" onClick={exportCSV} className="gap-2">
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
+            <label className="inline-flex items-center">
+              <input
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={(e) => e.target.files && importCSV(e.target.files[0])}
+              />
+              <span className="sr-only">Import CSV</span>
+              <Button variant="outline" className="gap-2">
+                <Upload className="h-4 w-4" />
+                Import
+              </Button>
+            </label>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (confirm("Delete all entries?")) setEntries([]);
+              }}
+              className="gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              Reset
+            </Button>
+          </div>
+        </header>
+
+        {loading && (
+          <div className="rounded-xl border bg-white p-3 text-sm text-slate-500">
+            Syncing…
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle> Add entry</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-end">
+                <div className="col-span-2 md:col-span-2">
+                  <Label>Date</Label>
+                  <Input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Time</Label>
+                  <Input
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Protein (g)</Label>
+                  <Input
+                    type="number"
+                    placeholder="e.g. 35"
+                    value={protein}
+                    onChange={(e) => setProtein(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Water (L)</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    placeholder="e.g. 0.5"
+                    value={water}
+                    onChange={(e) => setWater(e.target.value)}
+                  />
+                </div>
+                <div className="md:col-span-6">
+                  <Label>Note (optional)</Label>
+                  <Textarea
+                    rows={2}
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Shake, chicken, etc."
+                  />
+                </div>
+                <div className="flex gap-2 md:col-span-6">
+                  {exampleQuickAdds.map((qa) => (
+                    <Button
+                      key={qa.label}
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setProtein((p) => String(Number(p || 0) + qa.protein));
+                        setWater((w) => String(Number(w || 0) + qa.water));
+                      }}
+                    >
+                      {qa.label}
+                    </Button>
+                  ))}
+                  <Button onClick={addOrUpdate} className="ml-auto">
+                    {editingId ? "Update" : "Add"}
+                  </Button>
+                  {editingId && (
+                    <Button
+                      variant="outline"
+                      onClick={clearForm}
+                      className="gap-2"
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Today</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <StatRow
+                  icon={<Beef className="h-5 w-5" />}
+                  label="Protein"
+                  value={`${todayTotals.protein || 0} g`}
+                  goal={`${goals.dailyProtein} g`}
+                  pct={
+                    (100 * (todayTotals.protein || 0)) /
+                    Math.max(goals.dailyProtein, 1)
+                  }
+                />
+                <StatRow
+                  icon={<Droplets className="h-5 w-5" />}
+                  label="Water"
+                  value={`${todayTotals.water || 0} L`}
+                  goal={`${goals.dailyWater} L`}
+                  pct={
+                    (100 * (todayTotals.water || 0)) /
+                    Math.max(goals.dailyWater, 1)
+                  }
+                />
+                <div className="text-xs text-slate-500">
+                  {session
+                    ? "Synced to cloud"
+                    : "Local mode (sign in to sync across devices)"}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Log
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              {Object.keys(grouped).length === 0 && (
+                <p className="text-sm text-slate-500">
+                  No entries yet. Add your first above.
+                </p>
+              )}
+              {Object.entries(grouped).map(([d, arr]) => (
+                <div
+                  key={d}
+                  className="rounded-2xl border bg-white p-4 shadow-sm"
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="text-lg font-semibold">{d}</div>
+                    <div className="text-sm text-slate-500">
+                      Total: <b>{arr.reduce((s, e) => s + e.protein, 0)} g</b>{" "}
+                      protein • <b>{arr.reduce((s, e) => s + e.water, 0)} L</b>{" "}
+                      water
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-slate-500">
+                          <th className="py-2 pr-4">Time</th>
+                          <th className="py-2 pr-4">Protein (g)</th>
+                          <th className="py-2 pr-4">Water (L)</th>
+                          <th className="py-2 pr-4">Note</th>
+                          <th className="py-2" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {arr
+                          .sort((a, b) => a.time.localeCompare(b.time))
+                          .map((e) => (
+                            <tr key={e.id} className="border-t">
+                              <td className="py-2 pr-4">{e.time}</td>
+                              <td className="py-2 pr-4">{e.protein}</td>
+                              <td className="py-2 pr-4">{e.water}</td>
+                              <td className="py-2 pr-4">{e.note || ""}</td>
+                              <td className="py-2 flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => editEntry(e)}
+                                  className="gap-1"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                  Edit
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => removeEntry(e.id)}
+                                  className="text-red-600"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Last 14 days — Protein</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={lastNDays(14)}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="protein" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <footer className="pb-8 text-center text-xs text-slate-400">
+          {session
+            ? "Cloud sync via Supabase • RLS-protected"
+            : "Data is saved locally in your browser"}
+        </footer>
+      </div>
+
+      {/* Sign-in modal */}
+      <Modal
+        open={showSignIn}
+        onClose={() => setShowSignIn(false)}
+        title="Sign in"
+      >
+        <div className="space-y-2">
+          <Label>Email</Label>
+          <Input
+            type="email"
+            placeholder="you@example.com"
+            value={authEmail}
+            onChange={(e) => setAuthEmail(e.target.value)}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => setShowSignIn(false)}>
+              Cancel
+            </Button>
+            <Button onClick={signIn}>Send magic link</Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+function StatRow({
+  icon,
+  label,
+  value,
+  goal,
+  pct,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  goal: string;
+  pct: number;
+}) {
+  return (
+    <div className="rounded-2xl border bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {icon}
+          <div className="font-medium">{label}</div>
+        </div>
+        <div className="text-sm text-slate-500">Goal: {goal}</div>
+      </div>
+      <div className="mt-2 text-2xl font-semibold">{value}</div>
+      <div className="mt-3 h-2 w-full rounded-full bg-slate-100">
+        <div
+          className="h-2 rounded-full bg-slate-300"
+          style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+        />
+      </div>
     </div>
   );
 }
