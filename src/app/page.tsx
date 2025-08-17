@@ -26,13 +26,6 @@ import {
 } from "recharts";
 import { createClient, Session, SupabaseClient } from "@supabase/supabase-js";
 
-/**
- * This version removes shadcn/ui entirely and uses small inline UI primitives
- * (Button, Card, etc.) built with Tailwind classes only. It avoids the
- * shadcn CLI validation and works with Tailwind v3 or v4.
- */
-
-// ---- Tiny UI primitives (Tailwind only) ----
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -141,7 +134,6 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   );
 }
 
-// Minimal modal (for sign-in)
 function Modal({
   open,
   onClose,
@@ -165,31 +157,28 @@ function Modal({
   );
 }
 
-// ---- Supabase setup ----
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
 const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
 export const supabase: SupabaseClient | null =
   supabaseUrl && supabaseAnon ? createClient(supabaseUrl, supabaseAnon) : null;
 
-// ---- Types ----
 type Entry = {
   id: string;
   user_id?: string | null;
-  date: string; // YYYY-MM-DD
-  time: string; // HH:MM
-  protein: number; // grams
-  water: number; // liters
+  date: string;
+  time: string;
+  protein: number;
+  water: number;
   note?: string | null;
   created_at?: string;
 };
 
 type Goals = {
   user_id?: string | null;
-  dailyProtein: number; // grams
-  dailyWater: number; // liters
+  dailyProtein: number;
+  dailyWater: number;
 };
 
-// ---- Utilities ----
 const STORAGE_KEY = "pwt_entries_v1";
 const GOALS_KEY = "pwt_goals_v1";
 
@@ -207,14 +196,11 @@ const exampleQuickAdds = [
 ];
 
 export default function ProteinWaterTracker() {
-  // Auth/session
   const [session, setSession] = useState<Session | null>(null);
   const [authEmail, setAuthEmail] = useState("");
   const [showSignIn, setShowSignIn] = useState(false);
-  // NEW:
   const [authPassword, setAuthPassword] = useState("");
   const [authMode, setAuthMode] = useState<"password" | "magic">("password");
-  // Data
   const [entries, setEntries] = useState<Entry[]>([]);
   const [goals, setGoals] = useState<Goals>({
     dailyProtein: 160,
@@ -231,7 +217,6 @@ export default function ProteinWaterTracker() {
   const [gProtein, setGProtein] = useState<number>(goals.dailyProtein);
   const [gWater, setGWater] = useState<number>(goals.dailyWater);
 
-  // keep form in sync when goals loaded from DB/local
   useEffect(() => {
     setGProtein(goals.dailyProtein);
     setGWater(goals.dailyWater);
@@ -251,7 +236,6 @@ export default function ProteinWaterTracker() {
     setTime(toHM(now));
   }, []);
 
-  // persist local backup
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
   }, [entries]);
@@ -259,7 +243,6 @@ export default function ProteinWaterTracker() {
     localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
   }, [goals]);
 
-  // Supabase auth lifecycle
   useEffect(() => {
     if (!supabase) return;
     supabase.auth
@@ -271,7 +254,6 @@ export default function ProteinWaterTracker() {
     return () => sub?.subscription.unsubscribe();
   }, []);
 
-  // Load remote data when logged in
   useEffect(() => {
     if (!supabase || !session) return;
     const load = async () => {
@@ -352,7 +334,6 @@ export default function ProteinWaterTracker() {
       note: note || null,
     };
 
-    // local optimistic
     setEntries((prev) =>
       editingId
         ? prev.map((x) => (x.id === editingId ? { ...e } : x))
@@ -409,7 +390,6 @@ export default function ProteinWaterTracker() {
     setNote(e.note || "");
   };
 
-  // CSV export/import works for both local and signed-in modes
   const exportCSV = () => {
     const headers = [
       "date",
@@ -442,7 +422,6 @@ export default function ProteinWaterTracker() {
       const text = String(reader.result ?? "");
       const lines = text.split(/\r?\n/).filter(Boolean);
 
-      // de-dupe key (date|time|protein|water|note)
       const makeKey = (e: {
         date: string;
         time: string;
@@ -453,8 +432,8 @@ export default function ProteinWaterTracker() {
       const existing = new Set(entries.map(makeKey));
 
       let currentDate = "";
-      let lastTime: string | null = null; // for auto-time
-      let autoIdx = 0; // when day starts with blanks
+      let lastTime: string | null = null;
+      let autoIdx = 0;
       const loaded: Entry[] = [];
 
       const hasHeader = lines[0] && /date\s*,\s*time/i.test(lines[0]);
@@ -462,7 +441,6 @@ export default function ProteinWaterTracker() {
 
       const isSummaryWord = (s: string) => /^\s*(total|subtotal)\s*$/i.test(s);
 
-      // "1:00:00 PM" -> "13:00"
       const pad = (n: number) => String(n).padStart(2, "0");
       const normalizeTime = (s: string) => {
         const str = s.trim();
@@ -477,7 +455,7 @@ export default function ProteinWaterTracker() {
         }
         const m24 = str.match(/(\d{1,2}):(\d{2})/);
         if (m24) return `${pad(parseInt(m24[1], 10))}:${m24[2]}`;
-        return ""; // not a time
+        return "";
       };
 
       for (let i = startIdx; i < lines.length; i++) {
@@ -488,14 +466,11 @@ export default function ProteinWaterTracker() {
         const wRaw = (cols[3] || "").trim();
         const n = (cols[4] || "").trim();
 
-        // skip summary rows in ANY column
         if ([d, tRaw, pRaw, wRaw, n].some(isSummaryWord)) continue;
 
-        // forward-fill date
         if (d) currentDate = d;
         if (!currentDate) continue;
 
-        // time: allow missing -> auto-assign
         let time = normalizeTime(tRaw);
         if (!time) {
           if (lastTime) {
@@ -504,7 +479,7 @@ export default function ProteinWaterTracker() {
             dt.setMinutes(dt.getMinutes() + 1);
             time = `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
           } else {
-            time = `00:${pad(autoIdx++)}`; // first missing times of the day
+            time = `00:${pad(autoIdx++)}`;
           }
         }
         lastTime = time;
@@ -512,7 +487,6 @@ export default function ProteinWaterTracker() {
         const protein = Number(pRaw.replace(/[^0-9.]/g, "")) || 0;
         const water = Number(wRaw.replace(/[^0-9.]/g, "")) || 0;
 
-        // ignore completely empty lines
         if (!(protein || water || n)) continue;
 
         const candidate: Entry = {
@@ -542,7 +516,6 @@ export default function ProteinWaterTracker() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Derived
   const grouped = useMemo(() => {
     const map: Record<string, Entry[]> = {};
     entries
@@ -585,7 +558,6 @@ export default function ProteinWaterTracker() {
     water: 0,
   };
 
-  // Auth helpers
   const signIn = async () => {
     if (!supabase) return alert("Supabase not configured");
     const { error } = await supabase.auth.signInWithOtp({
@@ -643,7 +615,7 @@ export default function ProteinWaterTracker() {
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) importCSV(f);
-                  e.currentTarget.value = ""; // allow re-selecting same file next time
+                  e.currentTarget.value = "";
                 }}
               />
               <Button
@@ -978,7 +950,6 @@ export default function ProteinWaterTracker() {
         </footer>
       </div>
 
-      {/* Sign-in modal */}
       <Modal
         open={showSignIn}
         onClose={() => setShowSignIn(false)}
