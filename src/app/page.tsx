@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   Trash2,
   Download,
@@ -9,7 +9,7 @@ import {
   RefreshCcw,
   Calendar,
   Droplets,
-  Beef,
+  Leaf,
   Edit2,
   LogIn,
   LogOut,
@@ -211,35 +211,45 @@ export default function ProteinWaterTracker() {
   const [session, setSession] = useState<Session | null>(null);
   const [authEmail, setAuthEmail] = useState("");
   const [showSignIn, setShowSignIn] = useState(false);
-
+  // NEW:
+  const [authPassword, setAuthPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"password" | "magic">("password");
   // Data
-  const [entries, setEntries] = useState<Entry[]>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? (JSON.parse(raw) as Entry[]) : [];
-    } catch {
-      return [];
-    }
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [goals, setGoals] = useState<Goals>({
+    dailyProtein: 160,
+    dailyWater: 2,
   });
-
-  const [goals, setGoals] = useState<Goals>(() => {
-    try {
-      const raw = localStorage.getItem(GOALS_KEY);
-      return raw
-        ? (JSON.parse(raw) as Goals)
-        : { dailyProtein: 160, dailyWater: 2 };
-    } catch {
-      return { dailyProtein: 160, dailyWater: 2 };
-    }
-  });
-
-  const [date, setDate] = useState<string>(toYMD(nowLocal()));
-  const [time, setTime] = useState<string>(toHM(nowLocal()));
+  const [date, setDate] = useState<string>("");
+  const [time, setTime] = useState<string>("");
   const [protein, setProtein] = useState<string>("");
   const [water, setWater] = useState<string>("");
   const [note, setNote] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [editGoalsOpen, setEditGoalsOpen] = useState(false);
+  const [gProtein, setGProtein] = useState<number>(goals.dailyProtein);
+  const [gWater, setGWater] = useState<number>(goals.dailyWater);
+
+  // keep form in sync when goals loaded from DB/local
+  useEffect(() => {
+    setGProtein(goals.dailyProtein);
+    setGWater(goals.dailyWater);
+  }, [goals]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) setEntries(JSON.parse(raw));
+    } catch {}
+    try {
+      const raw = localStorage.getItem(GOALS_KEY);
+      if (raw) setGoals(JSON.parse(raw));
+    } catch {}
+    const now = new Date();
+    setDate(toYMD(now));
+    setTime(toHM(now));
+  }, []);
 
   // persist local backup
   useEffect(() => {
@@ -277,25 +287,58 @@ export default function ProteinWaterTracker() {
 
       const { data: g } = await supabase
         .from("goals")
-        .select("dailyProtein,dailyWater")
+        .select("daily_protein,daily_water")
         .eq("user_id", userId)
         .maybeSingle();
-      if (g) setGoals(g as Goals);
+
+      if (g)
+        setGoals({
+          dailyProtein: Number(g.daily_protein),
+          dailyWater: Number(g.daily_water),
+        });
+
       setLoading(false);
     };
     load();
   }, [session]);
 
+  const signInPassword = async () => {
+    if (!supabase) return alert("Supabase not configured");
+    const { error } = await supabase.auth.signInWithPassword({
+      email: authEmail,
+      password: authPassword,
+    });
+    if (error) alert(error.message);
+    else setShowSignIn(false);
+  };
+
+  const signUpPassword = async () => {
+    if (!supabase) return alert("Supabase not configured");
+    const { error } = await supabase.auth.signUp({
+      email: authEmail,
+      password: authPassword,
+    });
+    if (error) alert(error.message);
+    else setShowSignIn(false);
+  };
+
+  const signInWithGoogle = async () => {
+    if (!supabase) return alert("Supabase not configured");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) alert(error.message);
+  };
+
   const upsertGoals = async (g: Goals) => {
     setGoals(g);
     if (!supabase || !session) return;
-    await supabase
-      .from("goals")
-      .upsert({
-        user_id: session.user.id,
-        dailyProtein: g.dailyProtein,
-        dailyWater: g.dailyWater,
-      });
+    await supabase.from("goals").upsert({
+      user_id: session.user.id,
+      daily_protein: g.dailyProtein,
+      daily_water: g.dailyWater,
+    });
   };
 
   const addOrUpdate = async () => {
@@ -383,10 +426,7 @@ export default function ProteinWaterTracker() {
           : a.date.localeCompare(b.date)
       )
       .map((e) => [e.date, e.time, e.protein, e.water, e.note ?? ""].join(","));
-
-    // Build CSV with proper newline characters
     const csv = [headers.join(","), ...rows].join("\n");
-
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -399,33 +439,108 @@ export default function ProteinWaterTracker() {
   const importCSV = (file: File) => {
     const reader = new FileReader();
     reader.onload = async () => {
-      const text = String(reader.result);
-
-      // Correct newline handling
+      const text = String(reader.result ?? "");
       const lines = text.split(/\r?\n/).filter(Boolean);
 
-      const startIdx = lines[0].toLowerCase().includes("date") ? 1 : 0;
+      // de-dupe key (date|time|protein|water|note)
+      const makeKey = (e: {
+        date: string;
+        time: string;
+        protein: number;
+        water: number;
+        note?: string | null;
+      }) => [e.date, e.time, e.protein, e.water, e.note ?? ""].join("|");
+      const existing = new Set(entries.map(makeKey));
+
+      let currentDate = "";
+      let lastTime: string | null = null; // for auto-time
+      let autoIdx = 0; // when day starts with blanks
       const loaded: Entry[] = [];
+
+      const hasHeader = lines[0] && /date\s*,\s*time/i.test(lines[0]);
+      const startIdx = hasHeader ? 1 : 0;
+
+      const isSummaryWord = (s: string) => /^\s*(total|subtotal)\s*$/i.test(s);
+
+      // "1:00:00 PM" -> "13:00"
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const normalizeTime = (s: string) => {
+        const str = s.trim();
+        const m12 = str.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)/i);
+        if (m12) {
+          let h = parseInt(m12[1], 10);
+          const min = m12[2];
+          const ap = m12[3].toLowerCase();
+          if (ap === "pm" && h < 12) h += 12;
+          if (ap === "am" && h === 12) h = 0;
+          return `${pad(h)}:${min}`;
+        }
+        const m24 = str.match(/(\d{1,2}):(\d{2})/);
+        if (m24) return `${pad(parseInt(m24[1], 10))}:${m24[2]}`;
+        return ""; // not a time
+      };
+
       for (let i = startIdx; i < lines.length; i++) {
-        const [d, t, p, w, n] = lines[i].split(",");
-        if (!d || !t) continue;
-        loaded.push({
+        const cols = lines[i].split(",");
+        let d = (cols[0] || "").trim();
+        const tRaw = (cols[1] || "").trim();
+        const pRaw = (cols[2] || "").trim();
+        const wRaw = (cols[3] || "").trim();
+        const n = (cols[4] || "").trim();
+
+        // skip summary rows in ANY column
+        if ([d, tRaw, pRaw, wRaw, n].some(isSummaryWord)) continue;
+
+        // forward-fill date
+        if (d) currentDate = d;
+        if (!currentDate) continue;
+
+        // time: allow missing -> auto-assign
+        let time = normalizeTime(tRaw);
+        if (!time) {
+          if (lastTime) {
+            const [hh, mm] = lastTime.split(":").map((x) => parseInt(x, 10));
+            const dt = new Date(2000, 0, 1, hh, mm);
+            dt.setMinutes(dt.getMinutes() + 1);
+            time = `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+          } else {
+            time = `00:${pad(autoIdx++)}`; // first missing times of the day
+          }
+        }
+        lastTime = time;
+
+        const protein = Number(pRaw.replace(/[^0-9.]/g, "")) || 0;
+        const water = Number(wRaw.replace(/[^0-9.]/g, "")) || 0;
+
+        // ignore completely empty lines
+        if (!(protein || water || n)) continue;
+
+        const candidate: Entry = {
           id: crypto.randomUUID(),
-          date: d,
-          time: t,
-          protein: Number(p || 0),
-          water: Number(w || 0),
-          note: n,
-        });
+          date: currentDate,
+          time,
+          protein,
+          water,
+          note: n || null,
+        };
+
+        if (!existing.has(makeKey(candidate))) {
+          existing.add(makeKey(candidate));
+          loaded.push(candidate);
+        }
       }
+
       setEntries((prev) => [...prev, ...loaded]);
-      if (supabase && session) {
+
+      if (supabase && session && loaded.length) {
         const payload = loaded.map((e) => ({ ...e, user_id: session.user.id }));
         await supabase.from("entries").insert(payload);
       }
     };
     reader.readAsText(file);
   };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Derived
   const grouped = useMemo(() => {
@@ -520,13 +635,22 @@ export default function ProteinWaterTracker() {
             </Button>
             <label className="inline-flex items-center">
               <input
+                ref={fileInputRef}
+                id="csvFile"
                 type="file"
-                accept=".csv"
+                accept=".csv,text/csv"
                 className="hidden"
-                onChange={(e) => e.target.files && importCSV(e.target.files[0])}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) importCSV(f);
+                  e.currentTarget.value = ""; // allow re-selecting same file next time
+                }}
               />
-              <span className="sr-only">Import CSV</span>
-              <Button variant="outline" className="gap-2">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => fileInputRef.current?.click()}
+              >
                 <Upload className="h-4 w-4" />
                 Import
               </Button>
@@ -640,7 +764,7 @@ export default function ProteinWaterTracker() {
             <CardContent>
               <div className="space-y-4">
                 <StatRow
-                  icon={<Beef className="h-5 w-5" />}
+                  icon={<Leaf className="h-5 w-5" />}
                   label="Protein"
                   value={`${todayTotals.protein || 0} g`}
                   goal={`${goals.dailyProtein} g`}
@@ -659,11 +783,74 @@ export default function ProteinWaterTracker() {
                     Math.max(goals.dailyWater, 1)
                   }
                 />
-                <div className="text-xs text-slate-500">
-                  {session
-                    ? "Synced to cloud"
-                    : "Local mode (sign in to sync across devices)"}
-                </div>
+
+                {!editGoalsOpen ? (
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <div>
+                      {session
+                        ? "Synced to cloud"
+                        : "Local mode (sign in to sync across devices)"}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditGoalsOpen(true)}
+                    >
+                      Edit goals
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3 rounded-xl border p-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Daily protein (g)</Label>
+                        <Input
+                          type="number"
+                          value={gProtein}
+                          onChange={(e) =>
+                            setGProtein(Number(e.target.value || 0))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <Label>Daily water (L)</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          value={gWater}
+                          onChange={(e) =>
+                            setGWater(Number(e.target.value || 0))
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditGoalsOpen(false);
+                          setGProtein(goals.dailyProtein);
+                          setGWater(goals.dailyWater);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          upsertGoals({
+                            dailyProtein: Number(gProtein),
+                            dailyWater: Number(gWater),
+                          });
+                          setEditGoalsOpen(false);
+                        }}
+                      >
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -691,8 +878,20 @@ export default function ProteinWaterTracker() {
                   <div className="mb-3 flex items-center justify-between">
                     <div className="text-lg font-semibold">{d}</div>
                     <div className="text-sm text-slate-500">
-                      Total: <b>{arr.reduce((s, e) => s + e.protein, 0)} g</b>{" "}
-                      protein • <b>{arr.reduce((s, e) => s + e.water, 0)} L</b>{" "}
+                      Total:{" "}
+                      <b>
+                        {Number(
+                          arr.reduce((s, e) => s + (e.protein || 0), 0)
+                        ).toFixed(1)}{" "}
+                        g
+                      </b>{" "}
+                      protein •{" "}
+                      <b>
+                        {Number(
+                          arr.reduce((s, e) => s + (e.water || 0), 0)
+                        ).toFixed(2)}{" "}
+                        L
+                      </b>{" "}
                       water
                     </div>
                   </div>
@@ -713,8 +912,12 @@ export default function ProteinWaterTracker() {
                           .map((e) => (
                             <tr key={e.id} className="border-t">
                               <td className="py-2 pr-4">{e.time}</td>
-                              <td className="py-2 pr-4">{e.protein}</td>
-                              <td className="py-2 pr-4">{e.water}</td>
+                              <td className="py-2 pr-4">
+                                {Number(e.protein).toFixed(1)}
+                              </td>
+                              <td className="py-2 pr-4">
+                                {Number(e.water).toFixed(2)}
+                              </td>
                               <td className="py-2 pr-4">{e.note || ""}</td>
                               <td className="py-2 flex gap-2">
                                 <Button
@@ -756,9 +959,12 @@ export default function ProteinWaterTracker() {
                 <BarChart data={lastNDays(14)}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="protein" />
+                  <YAxis
+                    allowDecimals={false}
+                    tickFormatter={(v) => Number(v).toFixed(0)}
+                  />
+                  <Tooltip formatter={(value) => Number(value).toFixed(1)} />
+                  <Bar dataKey="protein" name="protein (g)" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -778,19 +984,81 @@ export default function ProteinWaterTracker() {
         onClose={() => setShowSignIn(false)}
         title="Sign in"
       >
-        <div className="space-y-2">
-          <Label>Email</Label>
-          <Input
-            type="email"
-            placeholder="you@example.com"
-            value={authEmail}
-            onChange={(e) => setAuthEmail(e.target.value)}
-          />
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <Button variant="outline" onClick={() => setShowSignIn(false)}>
-              Cancel
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant={authMode === "password" ? "default" : "outline"}
+              onClick={() => setAuthMode("password")}
+            >
+              Email + password
             </Button>
-            <Button onClick={signIn}>Send magic link</Button>
+            <Button
+              size="sm"
+              variant={authMode === "magic" ? "default" : "outline"}
+              onClick={() => setAuthMode("magic")}
+            >
+              Magic link
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Email</Label>
+            <Input
+              type="email"
+              placeholder="you@example.com"
+              value={authEmail}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setAuthEmail(e.target.value)
+              }
+            />
+          </div>
+
+          {authMode === "password" ? (
+            <>
+              <div className="space-y-2">
+                <Label>Password</Label>
+                <Input
+                  type="password"
+                  placeholder="••••••••"
+                  value={authPassword}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setAuthPassword(e.target.value)
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                <Button
+                  variant="secondary"
+                  onClick={signInPassword}
+                  className="gap-2"
+                >
+                  <LogIn className="h-4 w-4" />
+                  Sign in
+                </Button>
+                <Button variant="outline" onClick={signUpPassword}>
+                  Create account
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setShowSignIn(false)}>
+                Cancel
+              </Button>
+              <Button onClick={signIn}>Send magic link</Button>
+            </div>
+          )}
+
+          <div className="relative">
+            <div className="my-2 text-center text-xs text-slate-400">or</div>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={signInWithGoogle}
+            >
+              Continue with Google
+            </Button>
           </div>
         </div>
       </Modal>
