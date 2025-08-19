@@ -738,7 +738,7 @@ export default function ProteinWaterTracker() {
                 <StatRow
                   icon={<Leaf className="h-5 w-5" />}
                   label="Protein"
-                  value={`${todayTotals.protein || 0} g`}
+                  value={`${todayTotals.protein.toFixed(2) || 0} g`}
                   goal={`${goals.dailyProtein} g`}
                   pct={
                     (100 * (todayTotals.protein || 0)) /
