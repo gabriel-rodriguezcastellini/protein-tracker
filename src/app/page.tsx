@@ -5,7 +5,6 @@ import {
   Trash2,
   Download,
   Upload,
-  Plus,
   RefreshCcw,
   Calendar,
   Droplets,
@@ -197,10 +196,7 @@ const exampleQuickAdds = [
 
 export default function ProteinWaterTracker() {
   const [session, setSession] = useState<Session | null>(null);
-  const [authEmail, setAuthEmail] = useState("");
   const [showSignIn, setShowSignIn] = useState(false);
-  const [authPassword, setAuthPassword] = useState("");
-  const [authMode, setAuthMode] = useState<"password" | "magic">("password");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [goals, setGoals] = useState<Goals>({
     dailyProtein: 160,
@@ -283,26 +279,6 @@ export default function ProteinWaterTracker() {
     };
     load();
   }, [session]);
-
-  const signInPassword = async () => {
-    if (!supabase) return alert("Supabase not configured");
-    const { error } = await supabase.auth.signInWithPassword({
-      email: authEmail,
-      password: authPassword,
-    });
-    if (error) alert(error.message);
-    else setShowSignIn(false);
-  };
-
-  const signUpPassword = async () => {
-    if (!supabase) return alert("Supabase not configured");
-    const { error } = await supabase.auth.signUp({
-      email: authEmail,
-      password: authPassword,
-    });
-    if (error) alert(error.message);
-    else setShowSignIn(false);
-  };
 
   const signInWithGoogle = async () => {
     if (!supabase) return alert("Supabase not configured");
@@ -558,16 +534,6 @@ export default function ProteinWaterTracker() {
     water: 0,
   };
 
-  const signIn = async () => {
-    if (!supabase) return alert("Supabase not configured");
-    const { error } = await supabase.auth.signInWithOtp({
-      email: authEmail,
-      options: { emailRedirectTo: window.location.href },
-    });
-    if (error) alert(error.message);
-    else alert("Magic link sent. Check your email.");
-    setShowSignIn(false);
-  };
   const signOut = async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
@@ -956,81 +922,12 @@ export default function ProteinWaterTracker() {
         title="Sign in"
       >
         <div className="space-y-4">
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant={authMode === "password" ? "default" : "outline"}
-              onClick={() => setAuthMode("password")}
-            >
-              Email + password
-            </Button>
-            <Button
-              size="sm"
-              variant={authMode === "magic" ? "default" : "outline"}
-              onClick={() => setAuthMode("magic")}
-            >
-              Magic link
-            </Button>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Email</Label>
-            <Input
-              type="email"
-              placeholder="you@example.com"
-              value={authEmail}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setAuthEmail(e.target.value)
-              }
-            />
-          </div>
-
-          {authMode === "password" ? (
-            <>
-              <div className="space-y-2">
-                <Label>Password</Label>
-                <Input
-                  type="password"
-                  placeholder="••••••••"
-                  value={authPassword}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setAuthPassword(e.target.value)
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between pt-1">
-                <Button
-                  variant="secondary"
-                  onClick={signInPassword}
-                  className="gap-2"
-                >
-                  <LogIn className="h-4 w-4" />
-                  Sign in
-                </Button>
-                <Button variant="outline" onClick={signUpPassword}>
-                  Create account
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="flex items-center justify-end gap-2 pt-1">
-              <Button variant="outline" onClick={() => setShowSignIn(false)}>
-                Cancel
-              </Button>
-              <Button onClick={signIn}>Send magic link</Button>
-            </div>
-          )}
-
-          <div className="relative">
-            <div className="my-2 text-center text-xs text-slate-400">or</div>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={signInWithGoogle}
-            >
-              Continue with Google
-            </Button>
-          </div>
+          <Button className="w-full" onClick={signInWithGoogle}>
+            Continue with Google
+          </Button>
+          <p className="text-xs text-slate-500 text-center">
+            Only Google sign‑in is enabled for this app.
+          </p>
         </div>
       </Modal>
     </div>
