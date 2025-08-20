@@ -212,11 +212,32 @@ export default function ProteinWaterTracker() {
   const [editGoalsOpen, setEditGoalsOpen] = useState(false);
   const [gProtein, setGProtein] = useState<number>(goals.dailyProtein);
   const [gWater, setGWater] = useState<number>(goals.dailyWater);
+  const [autoTime, setAutoTime] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setGProtein(goals.dailyProtein);
     setGWater(goals.dailyWater);
   }, [goals]);
+
+  useEffect(() => {
+    const now = new Date();
+    setDate(toYMD(now));
+    setTime(toHM(now));
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted || !autoTime) return;
+
+    const id = setInterval(() => {
+      const now = new Date();
+      setDate(toYMD(now));
+      setTime(toHM(now));
+    }, 30_000);
+
+    return () => clearInterval(id);
+  }, [mounted, autoTime]);
 
   useEffect(() => {
     try {
@@ -301,10 +322,11 @@ export default function ProteinWaterTracker() {
 
   const addOrUpdate = async () => {
     if (!protein && !water) return;
+    const now = new Date();
     const e: Entry = {
       id: editingId ?? crypto.randomUUID(),
-      date,
-      time,
+      date: autoTime ? toYMD(now) : date,
+      time: autoTime ? toHM(now) : time,
       protein: protein ? Number(protein) : 0,
       water: water ? Number(water) : 0,
       note: note || null,
@@ -625,6 +647,8 @@ export default function ProteinWaterTracker() {
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
+                    onFocus={() => setAutoTime(false)}
+                    onBlur={() => setAutoTime(true)}
                   />
                 </div>
                 <div>
@@ -633,6 +657,8 @@ export default function ProteinWaterTracker() {
                     type="time"
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
+                    onFocus={() => setAutoTime(false)}
+                    onBlur={() => setAutoTime(true)}
                   />
                 </div>
                 <div>
