@@ -25,8 +25,65 @@ import {
 } from "recharts";
 import { createClient, Session, SupabaseClient } from "@supabase/supabase-js";
 
+const cn = (...classes: Array<string | false | null | undefined>) =>
+  classes.filter(Boolean).join(" ");
+
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
+}
+
+function useConfirm() {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("Are you sure?");
+  const [desc, setDesc] = useState<string | undefined>();
+  const resolver = useRef<((v: boolean) => void) | null>(null);
+
+  function confirm(
+    arg?: string | { title?: string; description?: string }
+  ): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      resolver.current = resolve;
+      if (typeof arg === "string") {
+        setTitle(arg);
+        setDesc(undefined);
+      } else {
+        setTitle(arg?.title ?? "Are you sure?");
+        setDesc(arg?.description);
+      }
+      setOpen(true);
+    });
+  }
+
+  const onCancel = () => {
+    setOpen(false);
+    resolver.current?.(false);
+  };
+  const onOk = () => {
+    setOpen(false);
+    resolver.current?.(true);
+  };
+
+  const ConfirmDialog: React.FC = () => (
+    <div
+      className={open ? "fixed inset-0 z-50 grid place-items-center" : "hidden"}
+    >
+      <div className="absolute inset-0 bg-black/30" onClick={onCancel} />
+      <div className="relative z-10 w-[90%] max-w-sm rounded-xl bg-white p-4 shadow-xl">
+        <h3 className="text-base font-semibold">{title}</h3>
+        {desc && <p className="mt-1 text-sm text-slate-600">{desc}</p>}
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={onOk}>
+            Confirm
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return { confirm, ConfirmDialog };
 }
 
 function Button({
@@ -178,6 +235,9 @@ type Goals = {
   dailyWater: number;
 };
 
+type ToastKind = "success" | "error" | "info";
+type ToastItem = { id: number; kind: ToastKind; message: string };
+
 const STORAGE_KEY = "pwt_entries_v1";
 const GOALS_KEY = "pwt_goals_v1";
 
@@ -214,6 +274,8 @@ export default function ProteinWaterTracker() {
   const [gWater, setGWater] = useState<number>(goals.dailyWater);
   const [autoTime, setAutoTime] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   useEffect(() => {
     setGProtein(goals.dailyProtein);
@@ -301,13 +363,19 @@ export default function ProteinWaterTracker() {
     load();
   }, [session]);
 
+  const notify = (message: string, kind: ToastKind = "info") => {
+    const id = Date.now() + Math.random();
+    setToasts((t) => [...t, { id, kind, message }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3000);
+  };
+
   const signInWithGoogle = async () => {
-    if (!supabase) return alert("Supabase not configured");
+    if (!supabase) return notify("Supabase not configured", "error");
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: window.location.origin },
     });
-    if (error) alert(error.message);
+    if (error) notify(error.message, "error");
   };
 
   const upsertGoals = async (g: Goals) => {
@@ -615,15 +683,19 @@ export default function ProteinWaterTracker() {
                 Import
               </Button>
             </label>
+
             <Button
-              variant="destructive"
-              onClick={() => {
-                if (confirm("Delete all entries?")) setEntries([]);
-              }}
               className="gap-2"
+              onClick={async () => {
+                const ok = await confirm({
+                  title: "Delete all entries?",
+                  description: "This will remove every row in your log.",
+                });
+                if (!ok) return;
+                setEntries([]);
+              }}
             >
-              <Trash2 className="h-4 w-4" />
-              Reset
+              <Trash2 className="h-4 w-4" /> Reset
             </Button>
           </div>
         </header>
@@ -896,10 +968,16 @@ export default function ProteinWaterTracker() {
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() => removeEntry(e.id)}
                                   className="text-red-600"
+                                  onClick={async () => {
+                                    const ok = await confirm(
+                                      "Delete this entry?"
+                                    );
+                                    if (!ok) return;
+                                    await removeEntry(e.id);
+                                  }}
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  Delete
                                 </Button>
                               </td>
                             </tr>
@@ -941,7 +1019,21 @@ export default function ProteinWaterTracker() {
             : "Data is saved locally in your browser"}
         </footer>
       </div>
-
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={cn(
+              "rounded-lg px-4 py-3 shadow-sm border bg-white text-sm",
+              t.kind === "success" && "border-green-200",
+              t.kind === "error" && "border-red-200",
+              t.kind === "info" && "border-slate-200"
+            )}
+          >
+            {t.message}
+          </div>
+        ))}
+      </div>
       <Modal
         open={showSignIn}
         onClose={() => setShowSignIn(false)}
@@ -956,6 +1048,7 @@ export default function ProteinWaterTracker() {
           </p>
         </div>
       </Modal>
+      <ConfirmDialog />
     </div>
   );
 }
