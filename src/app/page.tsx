@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
-  Trash2,
   Download,
   Upload,
   RefreshCcw,
@@ -683,20 +682,6 @@ export default function ProteinWaterTracker() {
                 Import
               </Button>
             </label>
-
-            <Button
-              className="gap-2"
-              onClick={async () => {
-                const ok = await confirm({
-                  title: "Delete all entries?",
-                  description: "This will remove every row in your log.",
-                });
-                if (!ok) return;
-                setEntries([]);
-              }}
-            >
-              <Trash2 className="h-4 w-4" /> Reset
-            </Button>
           </div>
         </header>
 
