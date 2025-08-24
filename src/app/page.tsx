@@ -214,7 +214,7 @@ function Modal({
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
 const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-export const supabase: SupabaseClient | null =
+const supabase: SupabaseClient | null =
   supabaseUrl && supabaseAnon ? createClient(supabaseUrl, supabaseAnon) : null;
 
 type Entry = {
@@ -525,7 +525,7 @@ export default function ProteinWaterTracker() {
 
       for (let i = startIdx; i < lines.length; i++) {
         const cols = lines[i].split(",");
-        let d = (cols[0] || "").trim();
+        const d = (cols[0] || "").trim();
         const tRaw = (cols[1] || "").trim();
         const pRaw = (cols[2] || "").trim();
         const wRaw = (cols[3] || "").trim();
