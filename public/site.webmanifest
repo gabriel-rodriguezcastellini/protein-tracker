@@ -1,0 +1,11 @@
+{
+  "name": "Protein & Water Tracker",
+  "short_name": "ProteinWater",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0ea5e9",
+  "icons": [
+    { "src": "/favicon-96x96.png", "sizes": "96x96", "type": "image/png" }    
+  ]
+}
