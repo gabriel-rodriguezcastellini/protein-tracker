@@ -629,19 +629,23 @@ export default function ProteinWaterTracker() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-slate-50 p-6">
+    <div className="min-h-screen w-full bg-slate-50 p-4 sm:p-6">
       <div className="mx-auto max-w-6xl space-y-6">
-        <header className="flex items-center justify-between">
-          <h1 className="text-3xl font-semibold tracking-tight">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
             Protein & Water Tracker
           </h1>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {session ? (
               <>
                 <div className="text-sm text-slate-600 flex items-center gap-2">
                   <User className="h-4 w-4" /> {session.user.email}
                 </div>
-                <Button variant="outline" onClick={signOut} className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={signOut}
+                  className="gap-2 sm:h-10 sm:px-4 h-9 px-3"
+                >
                   <LogOut className="h-4 w-4" />
                   Sign out
                 </Button>
@@ -649,14 +653,18 @@ export default function ProteinWaterTracker() {
             ) : (
               <Button
                 variant="secondary"
-                className="gap-2"
+                className="gap-2 sm:h-10 sm:px-4 h-9 px-3"
                 onClick={() => setShowSignIn(true)}
               >
                 <LogIn className="h-4 w-4" />
                 Sign in
               </Button>
             )}
-            <Button variant="outline" onClick={exportCSV} className="gap-2">
+            <Button
+              variant="outline"
+              onClick={exportCSV}
+              className="gap-2 sm:h-10 sm:px-4 h-9 px-3"
+            >
               <Download className="h-4 w-4" />
               Export
             </Button>
@@ -675,7 +683,7 @@ export default function ProteinWaterTracker() {
               />
               <Button
                 variant="outline"
-                className="gap-2"
+                className="gap-2 sm:h-10 sm:px-4 h-9 px-3"
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Upload className="h-4 w-4" />
@@ -697,7 +705,7 @@ export default function ProteinWaterTracker() {
               <CardTitle> Add entry</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-4 items-end">
                 <div className="col-span-2 md:col-span-2">
                   <Label>Date</Label>
                   <Input
@@ -746,7 +754,7 @@ export default function ProteinWaterTracker() {
                     placeholder="Shake, chicken, etc."
                   />
                 </div>
-                <div className="flex gap-2 md:col-span-6">
+                <div className="flex flex-wrap gap-2 md:col-span-6">
                   {exampleQuickAdds.map((qa) => (
                     <Button
                       key={qa.label}
