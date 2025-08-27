@@ -706,7 +706,7 @@ export default function ProteinWaterTracker() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-4 items-end">
-                <div className="col-span-2 md:col-span-2">
+                <div className="col-span-1 sm:col-span-2 md:col-span-2">
                   <Label>Date</Label>
                   <Input
                     type="date"
@@ -989,20 +989,28 @@ export default function ProteinWaterTracker() {
             <CardTitle>Last 14 days — Protein</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={lastNDays(14)}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis
-                    allowDecimals={false}
-                    tickFormatter={(v) => Number(v).toFixed(0)}
-                  />
-                  <Tooltip formatter={(value) => Number(value).toFixed(1)} />
-                  <Bar dataKey="protein" name="protein (g)" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            {lastNDays(14).length === 0 ? (
+              <div className="text-sm text-slate-500 p-3 rounded-xl border bg-white">
+                {session
+                  ? "No data for the last 14 days. Add your first entry above."
+                  : "No data found. Add an entry or sign in to load your cloud history."}
+              </div>
+            ) : (
+              <div className="h-64 w-full min-w-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={lastNDays(14)}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis
+                      allowDecimals={false}
+                      tickFormatter={(v) => Number(v).toFixed(0)}
+                    />
+                    <Tooltip formatter={(value) => Number(value).toFixed(1)} />
+                    <Bar dataKey="protein" name="protein (g)" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </CardContent>
         </Card>
 
