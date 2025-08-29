@@ -599,12 +599,19 @@ export default function ProteinWaterTracker() {
   const dailyTotals = useMemo(() => {
     const totals: { date: string; protein: number; water: number }[] = [];
     Object.entries(grouped).forEach(([d, arr]) => {
-      const protein = arr.reduce((s, e) => s + (e.protein || 0), 0);
-      const water = arr.reduce((s, e) => s + (e.water || 0), 0);
+      const proteinTenths = arr.reduce(
+        (s, e) => s + Math.round((e.protein || 0) * 10),
+        0
+      );
+      const waterCents = arr.reduce(
+        (s, e) => s + Math.round((e.water || 0) * 100),
+        0
+      );
+
       totals.push({
         date: d,
-        protein: roundTo(protein, 0.1),
-        water: roundTo(water, 0.01),
+        protein: proteinTenths / 10,
+        water: waterCents / 100,
       });
     });
     return totals.sort((a, b) => a.date.localeCompare(b.date));
@@ -909,19 +916,23 @@ export default function ProteinWaterTracker() {
                     <div className="text-sm text-slate-500">
                       Total:{" "}
                       <b>
-                        {Number(
-                          arr.reduce((s, e) => s + (e.protein || 0), 0)
-                        ).toFixed(1)}{" "}
-                        g
+                        {(
+                          arr.reduce(
+                            (s, e) => s + Math.round((e.protein || 0) * 10),
+                            0
+                          ) / 10
+                        ).toFixed(1)}
                       </b>{" "}
-                      protein •{" "}
+                      g protein •{" "}
                       <b>
-                        {Number(
-                          arr.reduce((s, e) => s + (e.water || 0), 0)
-                        ).toFixed(2)}{" "}
-                        L
+                        {(
+                          arr.reduce(
+                            (s, e) => s + Math.round((e.water || 0) * 100),
+                            0
+                          ) / 100
+                        ).toFixed(2)}
                       </b>{" "}
-                      water
+                      L water
                     </div>
                   </div>
                   <div className="overflow-x-auto">
