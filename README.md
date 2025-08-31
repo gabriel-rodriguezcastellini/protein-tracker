@@ -1,5 +1,7 @@
 # Protein & Water Tracker
 
+[![CodeQL Advanced](https://github.com/gabriel-rodriguezcastellini/protein-tracker/actions/workflows/codeql.yml/badge.svg)](https://github.com/gabriel-rodriguezcastellini/protein-tracker/actions/workflows/codeql.yml)
+
 A tiny web app to log daily **protein** (g) and **water** (L), visualize progress, and optionally sync to the cloud with **Supabase** (Google sign-in only). It also works fully **offline/local** using your browser’s storage and supports **CSV import/export**.
 
 ---
