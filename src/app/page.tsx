@@ -245,7 +245,6 @@ const pad = (n: number) => String(n).padStart(2, "0");
 const toYMD = (d: Date) =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const toHM = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-const roundTo = (val: number, step: number) => Math.round(val / step) * step;
 
 const exampleQuickAdds = [
   { protein: 35, water: 0, label: "+35g" },
@@ -263,6 +262,7 @@ export default function ProteinWaterTracker() {
   });
   const [date, setDate] = useState<string>("");
   const [time, setTime] = useState<string>("");
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
   const [protein, setProtein] = useState<string>("");
   const [water, setWater] = useState<string>("");
   const [note, setNote] = useState<string>("");
@@ -271,7 +271,6 @@ export default function ProteinWaterTracker() {
   const [editGoalsOpen, setEditGoalsOpen] = useState(false);
   const [gProtein, setGProtein] = useState<number>(goals.dailyProtein);
   const [gWater, setGWater] = useState<number>(goals.dailyWater);
-  const [autoTime, setAutoTime] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const { confirm, ConfirmDialog } = useConfirm();
@@ -289,16 +288,19 @@ export default function ProteinWaterTracker() {
   }, []);
 
   useEffect(() => {
-    if (!mounted || !autoTime) return;
-
-    const id = setInterval(() => {
+    const scheduleUpdate = () => {
       const now = new Date();
       setDate(toYMD(now));
       setTime(toHM(now));
-    }, 30_000);
+      timerRef.current = setTimeout(scheduleUpdate, 30_000);
+    };
 
-    return () => clearInterval(id);
-  }, [mounted, autoTime]);
+    scheduleUpdate();
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -362,6 +364,24 @@ export default function ProteinWaterTracker() {
     load();
   }, [session]);
 
+  const resetTimer = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      const now = new Date();
+      setDate(toYMD(now));
+      setTime(toHM(now));
+      timerRef.current = setTimeout(() => {
+        const loop = () => {
+          const now = new Date();
+          setDate(toYMD(now));
+          setTime(toHM(now));
+          timerRef.current = setTimeout(loop, 30_000);
+        };
+        loop();
+      }, 30_000);
+    }, 30_000);
+  };
+
   const notify = (message: string, kind: ToastKind = "info") => {
     const id = Date.now() + Math.random();
     setToasts((t) => [...t, { id, kind, message }]);
@@ -392,8 +412,8 @@ export default function ProteinWaterTracker() {
     const now = new Date();
     const e: Entry = {
       id: editingId ?? crypto.randomUUID(),
-      date: autoTime ? toYMD(now) : date,
-      time: autoTime ? toHM(now) : time,
+      date: date || toYMD(now),
+      time: time || toHM(now),
       protein: protein ? Number(protein) : 0,
       water: water ? Number(water) : 0,
       note: note || null,
@@ -718,9 +738,10 @@ export default function ProteinWaterTracker() {
                   <Input
                     type="date"
                     value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    onFocus={() => setAutoTime(false)}
-                    onBlur={() => setAutoTime(true)}
+                    onChange={(e) => {
+                      setDate(e.target.value);
+                      resetTimer();
+                    }}
                   />
                 </div>
                 <div>
@@ -728,9 +749,10 @@ export default function ProteinWaterTracker() {
                   <Input
                     type="time"
                     value={time}
-                    onChange={(e) => setTime(e.target.value)}
-                    onFocus={() => setAutoTime(false)}
-                    onBlur={() => setAutoTime(true)}
+                    onChange={(e) => {
+                      setTime(e.target.value);
+                      resetTimer();
+                    }}
                   />
                 </div>
                 <div>
