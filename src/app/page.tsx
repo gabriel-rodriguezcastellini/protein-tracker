@@ -1110,11 +1110,14 @@ function StatRow({
         <div className="text-sm text-slate-500">Goal: {goal}</div>
       </div>
       <div className="mt-2 text-2xl font-semibold">{value}</div>
-      <div className="mt-3 h-2 w-full rounded-full bg-slate-100">
+      <div className="relative mt-3 h-6 w-full rounded-full bg-slate-100 overflow-hidden">
         <div
-          className="h-2 rounded-full bg-slate-300"
+          className="h-full bg-slate-300"
           style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
         />
+        <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white">
+          {Math.min(100, Math.round(pct))}%
+        </span>
       </div>
     </div>
   );
