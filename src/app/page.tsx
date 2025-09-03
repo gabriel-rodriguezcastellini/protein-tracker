@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   Download,
-  Upload,
   RefreshCcw,
   Calendar,
   Droplets,
@@ -12,6 +11,7 @@ import {
   LogIn,
   LogOut,
   User,
+  Utensils,
 } from "lucide-react";
 import {
   Bar,
@@ -22,7 +22,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { createClient, Session, SupabaseClient } from "@supabase/supabase-js";
+import { Session } from "@supabase/supabase-js";
+import { getSupabaseClient } from "../../lib/supabaseClient";
 
 const cn = (...classes: Array<string | false | null | undefined>) =>
   classes.filter(Boolean).join(" ");
@@ -212,10 +213,7 @@ function Modal({
   );
 }
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-const supabase: SupabaseClient | null =
-  supabaseUrl && supabaseAnon ? createClient(supabaseUrl, supabaseAnon) : null;
+const supabase = getSupabaseClient();
 
 type Entry = {
   id: string;
@@ -224,6 +222,7 @@ type Entry = {
   time: string;
   protein: number;
   water: number;
+  carbs: number;
   note?: string | null;
   created_at?: string;
 };
@@ -232,6 +231,7 @@ type Goals = {
   user_id?: string | null;
   dailyProtein: number;
   dailyWater: number;
+  dailyCarbs: number;
 };
 
 type ToastKind = "success" | "error" | "info";
@@ -246,24 +246,20 @@ const toYMD = (d: Date) =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const toHM = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
-const exampleQuickAdds = [
-  { protein: 35, water: 0, label: "+35g" },
-  { protein: 49, water: 0, label: "+49g" },
-  { protein: 0, water: 0.5, label: "+0.5L" },
-];
-
 export default function ProteinWaterTracker() {
   const [session, setSession] = useState<Session | null>(null);
   const [showSignIn, setShowSignIn] = useState(false);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [goals, setGoals] = useState<Goals>({
-    dailyProtein: 160,
-    dailyWater: 2,
+    dailyProtein: 0,
+    dailyWater: 0,
+    dailyCarbs: 0,
   });
   const [date, setDate] = useState<string>("");
   const [time, setTime] = useState<string>("");
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const [protein, setProtein] = useState<string>("");
+  const [carbs, setCarbs] = useState<string>("");
   const [water, setWater] = useState<string>("");
   const [note, setNote] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -271,7 +267,7 @@ export default function ProteinWaterTracker() {
   const [editGoalsOpen, setEditGoalsOpen] = useState(false);
   const [gProtein, setGProtein] = useState<number>(goals.dailyProtein);
   const [gWater, setGWater] = useState<number>(goals.dailyWater);
-  const [mounted, setMounted] = useState(false);
+  const [gCarbs, setGCarbs] = useState<number>(goals.dailyCarbs);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const { confirm, ConfirmDialog } = useConfirm();
 
@@ -284,7 +280,6 @@ export default function ProteinWaterTracker() {
     const now = new Date();
     setDate(toYMD(now));
     setTime(toHM(now));
-    setMounted(true);
   }, []);
 
   useEffect(() => {
@@ -349,7 +344,7 @@ export default function ProteinWaterTracker() {
 
       const { data: g } = await supabase
         .from("goals")
-        .select("daily_protein,daily_water")
+        .select("daily_protein,daily_water,daily_carbs")
         .eq("user_id", userId)
         .maybeSingle();
 
@@ -357,6 +352,7 @@ export default function ProteinWaterTracker() {
         setGoals({
           dailyProtein: Number(g.daily_protein),
           dailyWater: Number(g.daily_water),
+          dailyCarbs: Number(g.daily_carbs),
         });
 
       setLoading(false);
@@ -404,11 +400,12 @@ export default function ProteinWaterTracker() {
       user_id: session.user.id,
       daily_protein: g.dailyProtein,
       daily_water: g.dailyWater,
+      daily_carbs: g.dailyCarbs,
     });
   };
 
   const addOrUpdate = async () => {
-    if (!protein && !water) return;
+    if (!protein && !water && !carbs) return;
     const now = new Date();
     const e: Entry = {
       id: editingId ?? crypto.randomUUID(),
@@ -416,6 +413,7 @@ export default function ProteinWaterTracker() {
       time: time || toHM(now),
       protein: protein ? Number(protein) : 0,
       water: water ? Number(water) : 0,
+      carbs: carbs ? Number(carbs) : 0,
       note: note || null,
     };
 
@@ -434,6 +432,7 @@ export default function ProteinWaterTracker() {
             time: e.time,
             protein: e.protein,
             water: e.water,
+            carbs: e.carbs,
             note: e.note,
           })
           .eq("id", e.id)
@@ -461,6 +460,7 @@ export default function ProteinWaterTracker() {
   const clearForm = () => {
     setProtein("");
     setWater("");
+    setCarbs("");
     setNote("");
     setEditingId(null);
     setTime(toHM(nowLocal()));
@@ -472,6 +472,7 @@ export default function ProteinWaterTracker() {
     setTime(e.time);
     setProtein(String(e.protein || ""));
     setWater(String(e.water || ""));
+    setCarbs(String(e.carbs || ""));
     setNote(e.note || "");
   };
 
@@ -481,6 +482,7 @@ export default function ProteinWaterTracker() {
       "time",
       "grams_of_protein",
       "liters_of_water",
+      "grams_of_carbs",
       "note",
     ];
     const rows = entries
@@ -490,116 +492,18 @@ export default function ProteinWaterTracker() {
           ? a.time.localeCompare(b.time)
           : a.date.localeCompare(b.date)
       )
-      .map((e) => [e.date, e.time, e.protein, e.water, e.note ?? ""].join(","));
+      .map((e) =>
+        [e.date, e.time, e.protein, e.water, e.carbs, e.note ?? ""].join(",")
+      );
     const csv = [headers.join(","), ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `protein_water_${toYMD(new Date())}.csv`;
+    a.download = `protein_water_carbs_${toYMD(new Date())}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
-
-  const importCSV = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const text = String(reader.result ?? "");
-      const lines = text.split(/\r?\n/).filter(Boolean);
-
-      const makeKey = (e: {
-        date: string;
-        time: string;
-        protein: number;
-        water: number;
-        note?: string | null;
-      }) => [e.date, e.time, e.protein, e.water, e.note ?? ""].join("|");
-      const existing = new Set(entries.map(makeKey));
-
-      let currentDate = "";
-      let lastTime: string | null = null;
-      let autoIdx = 0;
-      const loaded: Entry[] = [];
-
-      const hasHeader = lines[0] && /date\s*,\s*time/i.test(lines[0]);
-      const startIdx = hasHeader ? 1 : 0;
-
-      const isSummaryWord = (s: string) => /^\s*(total|subtotal)\s*$/i.test(s);
-
-      const pad = (n: number) => String(n).padStart(2, "0");
-      const normalizeTime = (s: string) => {
-        const str = s.trim();
-        const m12 = str.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)/i);
-        if (m12) {
-          let h = parseInt(m12[1], 10);
-          const min = m12[2];
-          const ap = m12[3].toLowerCase();
-          if (ap === "pm" && h < 12) h += 12;
-          if (ap === "am" && h === 12) h = 0;
-          return `${pad(h)}:${min}`;
-        }
-        const m24 = str.match(/(\d{1,2}):(\d{2})/);
-        if (m24) return `${pad(parseInt(m24[1], 10))}:${m24[2]}`;
-        return "";
-      };
-
-      for (let i = startIdx; i < lines.length; i++) {
-        const cols = lines[i].split(",");
-        const d = (cols[0] || "").trim();
-        const tRaw = (cols[1] || "").trim();
-        const pRaw = (cols[2] || "").trim();
-        const wRaw = (cols[3] || "").trim();
-        const n = (cols[4] || "").trim();
-
-        if ([d, tRaw, pRaw, wRaw, n].some(isSummaryWord)) continue;
-
-        if (d) currentDate = d;
-        if (!currentDate) continue;
-
-        let time = normalizeTime(tRaw);
-        if (!time) {
-          if (lastTime) {
-            const [hh, mm] = lastTime.split(":").map((x) => parseInt(x, 10));
-            const dt = new Date(2000, 0, 1, hh, mm);
-            dt.setMinutes(dt.getMinutes() + 1);
-            time = `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
-          } else {
-            time = `00:${pad(autoIdx++)}`;
-          }
-        }
-        lastTime = time;
-
-        const protein = Number(pRaw.replace(/[^0-9.]/g, "")) || 0;
-        const water = Number(wRaw.replace(/[^0-9.]/g, "")) || 0;
-
-        if (!(protein || water || n)) continue;
-
-        const candidate: Entry = {
-          id: crypto.randomUUID(),
-          date: currentDate,
-          time,
-          protein,
-          water,
-          note: n || null,
-        };
-
-        if (!existing.has(makeKey(candidate))) {
-          existing.add(makeKey(candidate));
-          loaded.push(candidate);
-        }
-      }
-
-      setEntries((prev) => [...prev, ...loaded]);
-
-      if (supabase && session && loaded.length) {
-        const payload = loaded.map((e) => ({ ...e, user_id: session.user.id }));
-        await supabase.from("entries").insert(payload);
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const grouped = useMemo(() => {
     const map: Record<string, Entry[]> = {};
@@ -617,7 +521,12 @@ export default function ProteinWaterTracker() {
   }, [entries]);
 
   const dailyTotals = useMemo(() => {
-    const totals: { date: string; protein: number; water: number }[] = [];
+    const totals: {
+      date: string;
+      protein: number;
+      water: number;
+      carbs: number;
+    }[] = [];
     Object.entries(grouped).forEach(([d, arr]) => {
       const proteinTenths = arr.reduce(
         (s, e) => s + Math.round((e.protein || 0) * 10),
@@ -627,11 +536,15 @@ export default function ProteinWaterTracker() {
         (s, e) => s + Math.round((e.water || 0) * 100),
         0
       );
-
+      const carbTenths = arr.reduce(
+        (s, e) => s + Math.round((e.carbs || 0) * 10),
+        0
+      );
       totals.push({
         date: d,
         protein: proteinTenths / 10,
         water: waterCents / 100,
+        carbs: carbTenths / 10,
       });
     });
     return totals.sort((a, b) => a.date.localeCompare(b.date));
@@ -648,6 +561,7 @@ export default function ProteinWaterTracker() {
   const todayTotals = dailyTotals.find((d) => d.date === today) || {
     protein: 0,
     water: 0,
+    carbs: 0,
   };
 
   const signOut = async () => {
@@ -695,28 +609,6 @@ export default function ProteinWaterTracker() {
               <Download className="h-4 w-4" />
               Export
             </Button>
-            <label className="inline-flex items-center">
-              <input
-                ref={fileInputRef}
-                id="csvFile"
-                type="file"
-                accept=".csv,text/csv"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) importCSV(f);
-                  e.currentTarget.value = "";
-                }}
-              />
-              <Button
-                variant="outline"
-                className="gap-2 sm:h-10 sm:px-4 h-9 px-3"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload className="h-4 w-4" />
-                Import
-              </Button>
-            </label>
           </div>
         </header>
 
@@ -726,8 +618,8 @@ export default function ProteinWaterTracker() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="md:col-span-2">
+        <div className="grid grid-cols-12">
+          <Card className="col-span-12">
             <CardHeader>
               <CardTitle> Add entry</CardTitle>
             </CardHeader>
@@ -759,7 +651,6 @@ export default function ProteinWaterTracker() {
                   <Label>Protein (g)</Label>
                   <Input
                     type="number"
-                    placeholder="e.g. 35"
                     value={protein}
                     onChange={(e) => setProtein(e.target.value)}
                   />
@@ -769,9 +660,16 @@ export default function ProteinWaterTracker() {
                   <Input
                     type="number"
                     step="0.1"
-                    placeholder="e.g. 0.5"
                     value={water}
                     onChange={(e) => setWater(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Carbs (g)</Label>
+                  <Input
+                    type="number"
+                    value={carbs}
+                    onChange={(e) => setCarbs(e.target.value)}
                   />
                 </div>
                 <div className="md:col-span-6">
@@ -780,23 +678,9 @@ export default function ProteinWaterTracker() {
                     rows={2}
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
-                    placeholder="Shake, chicken, etc."
                   />
                 </div>
                 <div className="flex flex-wrap gap-2 md:col-span-6">
-                  {exampleQuickAdds.map((qa) => (
-                    <Button
-                      key={qa.label}
-                      type="button"
-                      variant="secondary"
-                      onClick={() => {
-                        setProtein((p) => String(Number(p || 0) + qa.protein));
-                        setWater((w) => String(Number(w || 0) + qa.water));
-                      }}
-                    >
-                      {qa.label}
-                    </Button>
-                  ))}
                   <Button onClick={addOrUpdate} className="ml-auto">
                     {editingId ? "Update" : "Add"}
                   </Button>
@@ -813,18 +697,13 @@ export default function ProteinWaterTracker() {
                 </div>
               </div>
             </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Today</CardTitle>
-            </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <CardTitle>Today</CardTitle>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <StatRow
                   icon={<Leaf className="h-5 w-5" />}
                   label="Protein"
-                  value={`${todayTotals.protein.toFixed(2) || 0} g`}
+                  value={`${todayTotals.protein.toFixed(1)} g`}
                   goal={`${goals.dailyProtein} g`}
                   pct={
                     (100 * (todayTotals.protein || 0)) /
@@ -834,14 +713,23 @@ export default function ProteinWaterTracker() {
                 <StatRow
                   icon={<Droplets className="h-5 w-5" />}
                   label="Water"
-                  value={`${todayTotals.water || 0} L`}
+                  value={`${todayTotals.water.toFixed(1)} L`}
                   goal={`${goals.dailyWater} L`}
                   pct={
                     (100 * (todayTotals.water || 0)) /
                     Math.max(goals.dailyWater, 1)
                   }
                 />
-
+                <StatRow
+                  icon={<Utensils className="h-5 w-5" />}
+                  label="Carbs"
+                  value={`${todayTotals.carbs.toFixed(1)} g`}
+                  goal={`${goals.dailyCarbs} g`}
+                  pct={
+                    (100 * (todayTotals.carbs || 0)) /
+                    Math.max(goals.dailyCarbs, 1)
+                  }
+                />
                 {!editGoalsOpen ? (
                   <div className="flex items-center justify-between text-xs text-slate-500">
                     <div>
@@ -881,6 +769,16 @@ export default function ProteinWaterTracker() {
                           }
                         />
                       </div>
+                      <div>
+                        <Label>Daily carbs (g)</Label>
+                        <Input
+                          type="number"
+                          value={gCarbs}
+                          onChange={(e) =>
+                            setGCarbs(Number(e.target.value || 0))
+                          }
+                        />
+                      </div>
                     </div>
                     <div className="flex justify-end gap-2">
                       <Button
@@ -890,6 +788,7 @@ export default function ProteinWaterTracker() {
                           setEditGoalsOpen(false);
                           setGProtein(goals.dailyProtein);
                           setGWater(goals.dailyWater);
+                          setGCarbs(goals.dailyCarbs);
                         }}
                       >
                         Cancel
@@ -900,6 +799,7 @@ export default function ProteinWaterTracker() {
                           upsertGoals({
                             dailyProtein: Number(gProtein),
                             dailyWater: Number(gWater),
+                            dailyCarbs: Number(gCarbs),
                           });
                           setEditGoalsOpen(false);
                         }}
@@ -964,6 +864,7 @@ export default function ProteinWaterTracker() {
                           <th className="py-2 pr-4">Time</th>
                           <th className="py-2 pr-4">Protein (g)</th>
                           <th className="py-2 pr-4">Water (L)</th>
+                          <th className="py-2 pr-4">Carbs (g)</th>
                           <th className="py-2 pr-4">Note</th>
                           <th className="py-2" />
                         </tr>
